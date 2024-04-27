@@ -1,0 +1,3 @@
+roslaunch segbot_bringup segbot_bu.launch
+# roslaunch segbot_navigation robot_with_gmapping_bu.launch
+roslaunch bwi_joystick_teleop joystick_teleop.launch

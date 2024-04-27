@@ -1,0 +1,1 @@
+roslaunch ur5_yan ur5_grasp.launch

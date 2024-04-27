@@ -1,0 +1,8 @@
+prefix=/home/yan/BestMan_Real/catkin_ws/devel
+
+Name: sim_grasp
+Description: Description of sim_grasp
+Version: 0.0.1
+Cflags: -I/home/yan/BestMan_Real/catkin_ws/devel/include
+Libs: -L${prefix}/lib 
+Requires: roscpp rospy message_runtime std_msgs geometry_msgs sensor_msgs

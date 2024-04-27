@@ -1,0 +1,10 @@
+#############################
+## 相机标定的参数
+#############################
+caliboard :         # 标定板
+  row : 9           # 行数
+  column : 14       # 列数
+  ceil_size : 17.6  # 格子的尺寸,单位mm
+  type: "radon"     # 标定板类型
+cali_img_source_path: 'data' # 标定图像的存储路径
+cali_info_save_path : 'config' # 相机标定信息存储路径

@@ -1,0 +1,8 @@
+prefix=/home/yan/BestMan_Real/catkin_ws/install
+
+Name: handeye-calib
+Description: Description of handeye-calib
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

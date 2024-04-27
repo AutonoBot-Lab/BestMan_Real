@@ -1,0 +1,1 @@
+rosrun tf tf_echo base_link tool0_controller

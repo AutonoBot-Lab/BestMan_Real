@@ -1,0 +1,7 @@
+set(rqt_easy_handeye_SETUP_PY_SETUP_MODULE "setuptools")
+set(rqt_easy_handeye_SETUP_PY_VERSION "0.4.3")
+set(rqt_easy_handeye_SETUP_PY_SCRIPTS "")
+set(rqt_easy_handeye_SETUP_PY_PACKAGES "rqt_easy_handeye")
+set(rqt_easy_handeye_SETUP_PY_PACKAGE_DIRS "src/rqt_easy_handeye")
+set(rqt_easy_handeye_SETUP_PY_MODULES "")
+set(rqt_easy_handeye_SETUP_PY_MODULE_DIRS "")
