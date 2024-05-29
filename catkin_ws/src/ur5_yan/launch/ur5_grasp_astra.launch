@@ -1,0 +1,38 @@
+<launch>
+  <!-- robot_ip: IP-address of the robot's socket-messaging server -->
+  <arg name="robot_ip" default="10.66.171.4" doc="IP of the controller"/>
+  <!-- kinematics_config: calibration file for UR5e -->
+  <arg name="kinematics_config" default="$(find ur_description)/config/ur5e_calibration.yaml"/>
+  <!-- marker parameters -->
+  <arg name="marker_size" value="0.03" doc="Size of the ArUco marker used, in meters" />
+  <arg name="marker_id" value="25" doc="The ID of the ArUco marker used" />
+  <!-- camera parameters -->
+  <arg name="namespace_prefix"  default="ur5_astra_handeyecalibration" />
+  <arg name="eye_on_hand"  default="false" />
+
+  <!--start UR5e-->
+  <include file="$(find ur_robot_driver)/launch/ur5e_bringup.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
+    <arg name="kinematics_config" value="$(arg kinematics_config)"/>
+  </include>
+
+  <!--start moveit-->
+  <include file="$(find ur5e_moveit_config)/launch/ur5e_moveit_planning_execution.launch">
+  </include>
+
+  <!--start rviz-->
+  <include file="$(find ur5_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="rviz_config" value="$(find ur5_moveit_config)/launch/moveit.rviz"/>
+  </include>
+  
+  <!-- start astro camera -->
+  <include file="$(find astra_camera)/launch/astrapro.launch" >
+  </include>
+
+  <!--publish transformation-->
+  <include file="$(find easy_handeye)/launch/publish.launch" >
+    <arg name="eye_on_hand" value="$(arg eye_on_hand)"/>
+    <arg name="namespace_prefix" value="$(arg namespace_prefix)"/>
+  </include>
+
+</launch>

@@ -1,0 +1,411 @@
+# -----------------------------------------
+# This code is to control UR5e using the Python MoveIt user interfaces
+# -----------------------------------------
+
+#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
+from __future__ import print_function
+import sys
+import copy
+import rospy
+import moveit_commander
+import moveit_msgs.msg
+import geometry_msgs.msg
+from geometry_msgs.msg import PoseStamped
+from math import pi
+import tf
+
+
+class MoveGroupInteface(object):
+	# -----------------------------------------
+	# setup the moveit
+	# -----------------------------------------
+	def __init__(self):
+		super(MoveGroupInteface, self).__init__()
+		# -----------------------------------------
+		# initialize moveit_commander and rospy
+		# -----------------------------------------
+		moveit_commander.roscpp_initialize(sys.argv)
+		rospy.init_node('ur_move_test_node', anonymous=True)
+
+		# -----------------------------------------		
+		# instantiate RobotCommander
+		# -----------------------------------------
+		self.robot = moveit_commander.RobotCommander()
+
+		# -----------------------------------------		
+		# instantiate PlanningSceneInterface
+		# -----------------------------------------
+		self.scene = moveit_commander.PlanningSceneInterface()  # Not used in this code
+		
+		# -----------------------------------------		
+		# instantiate MoveGroupCommander
+		# -----------------------------------------
+		group_name = 'manipulator'  # group_name can be find in ur5_moveit_config/config/ur5.srdf
+		self.move_group_commander = moveit_commander.MoveGroupCommander(group_name)
+
+		# -----------------------------------------		
+		# control speed
+		# -----------------------------------------
+		self.move_group_commander.set_max_velocity_scaling_factor(0.01)
+		self.move_group_commander.set_max_acceleration_scaling_factor(0.01)
+
+		# -----------------------------------------		
+		# allow replanning
+		# -----------------------------------------
+		self.move_group_commander.allow_replanning(True)
+		self.move_group_commander.set_goal_position_tolerance(0.001)
+		self.move_group_commander.set_goal_orientation_tolerance(0.001)
+
+		# -----------------------------------------
+		# get and print basic information
+		# -----------------------------------------
+		self.planning_frame = self.move_group_commander.get_planning_frame()
+		# print('planning frame: {}'.format(self.planning_frame))
+		
+		self.eef_link = self.move_group_commander.get_end_effector_link()
+		# print('end effector link: {}'.format(self.eef_link))
+		
+		self.group_names = self.robot.get_group_names()
+		# print('available planning groups:{}'.format(self.robot.get_group_names()))
+		
+		# print('robot state:{}'.format(self.robot.get_current_state()))
+		
+		# -----------------------------------------
+		# get and print basic information
+		# -----------------------------------------
+		self.box_name = ''
+
+		# -----------------------------------------
+		# create listener
+		# -----------------------------------------
+		self.listener = tf.TransformListener()
+		self.rate = rospy.Rate(10.0)
+
+
+	def display_trajectory_rviz(self, plan):
+		# -----------------------------------------				
+		# visualize the trajectory 
+		# -----------------------------------------
+		
+		# create a publisher
+		display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path', moveit_msgs.msg.DisplayTrajectory, queue_size=20)
+
+		# record trajectory
+		display_trajectory = moveit_msgs.msg.DisplayTrajectory()
+		display_trajectory.trajectory_start = self.robot.get_current_state()
+		display_trajectory.trajectory.append(plan)
+
+		# publish trajectory
+		display_trajectory_publisher.publish(display_trajectory)
+
+
+	def plan_joint_goal(self, joint0, joint1, joint2, joint3, joint4, joint5):
+		# ------------------------------
+		# set joint goal
+		# ------------------------------
+		joint_goal = self.move_group_commander.get_current_joint_values()
+		joint_goal[0] = joint0
+		joint_goal[1] = joint1
+		joint_goal[2] = joint2
+		joint_goal[3] = joint3
+		joint_goal[4] = joint4
+		joint_goal[5] = joint5
+		'''
+		The go command can be called with joint values, poses, or without any
+		parameters if you have already set the pose or joint target for the group
+		'''
+		self.move_group_commander.go(joint_goal, wait=True)
+
+		# ------------------------------
+		# stop and ensure that there is no residual movement
+		# ------------------------------
+		self.move_group_commander.stop()
+	
+
+	def plan_pose_goal(self, pose_x, pose_y, pose_z, pose_w):
+		# ------------------------------
+		# set pose goal
+		# ------------------------------
+		pose_goal = geometry_msgs.msg.Pose()
+
+		pose_goal.orientation.w = pose_w
+		pose_goal.position.x = pose_x
+		pose_goal.position.y = pose_y
+		pose_goal.position.z = pose_z
+
+		# ------------------------------
+		# plan to achieve pose goal
+		# ------------------------------
+		self.move_group_commander.set_pose_target(pose_goal)
+		plan = self.move_group_commander.go(wait=True)
+
+		# ------------------------------
+		# stop and ensure that there is no residual movement
+		# ------------------------------
+		self.move_group_commander.stop()
+
+		'''
+		It is always good to clear your targets after planning with poses.
+		Note: there is no equivalent function for clear_joint_value_targets()
+		'''
+		self.move_group_commander.clear_pose_targets()
+
+
+	def plan_cartesian_path(self, x, y, z):
+		waypoints = []
+		# ------------------------------
+		# generate a goal pose
+		# ------------------------------
+		wpose = self.move_group_commander.get_current_pose().pose
+		# print('current pose:{}'.format(wpose))
+		# print('-'*30)
+
+		wpose.position.x = x
+		wpose.position.y = y
+		wpose.position.z = z
+		waypoints.append(copy.deepcopy(wpose))
+
+		'''
+		We want the Cartesian path to be interpolated at a resolution of 1 cm
+		which is why we will specify 0.01 as the eef_step in Cartesian
+		translation.  We will disable the jump threshold by setting it to 0.0,
+		ignoring the check for infeasible jumps in joint space, which is sufficient
+		for this tutorial.
+		'''
+		(plan, fraction) = self.move_group_commander.compute_cartesian_path(
+										waypoints, # waypoints to follow
+										0.01,      # eef_step
+										0.0)       # jump_threshold
+
+		# Note: We are just planning, not asking move_group to actually move the robot yet:
+		print('planning is completed')
+		return plan, fraction
+
+
+	def execute_plan(self, plan):
+		'''
+		Use execute if you would like the robot to follow
+		the plan that has already been computed:
+		'''
+		self.move_group_commander.execute(plan, wait=True)
+
+
+	def wait_for_state_update(self, box_is_known=False, box_is_attached=False, timeout=4):
+		start = rospy.get_time()
+		seconds = rospy.get_time()
+		while (seconds - start < timeout) and not rospy.is_shutdown():
+			# Test if the box is in attached objects
+			attached_objects = self.scene.get_attached_objects([self.box_name])
+			is_attached = len(attached_objects.keys()) > 0
+
+			# Test if the box is in the scene.
+			# Note that attaching the box will remove it from known_objects
+			is_known = self.box_name in self.scene.get_known_object_names()
+
+			# Test if we are in the expected state
+			if (box_is_attached == is_attached) and (box_is_known == is_known):
+				return True
+
+			# Sleep so that we give other threads time on the processor
+			rospy.sleep(0.1)
+			seconds = rospy.get_time()
+
+		# If we exited the while loop without returning then we timed out
+		return False
+
+
+	def add_fixed_obstacle(self, obstacle_name, frame, obstacle_size, obstsacle_position, timeout=4):
+		# obstacle pose
+		obstacle_pose = PoseStamped()
+		obstacle_pose.header.frame_id = frame
+		obstacle_pose.pose.position.x = obstsacle_position[0]
+		obstacle_pose.pose.position.y = obstsacle_position[1]
+		obstacle_pose.pose.position.z = obstsacle_position[2]
+		obstacle_pose.pose.orientation.w = 1.0
+
+		# add obstacle
+		self.scene.add_box(obstacle_name, obstacle_pose, obstacle_size)
+		rospy.sleep(1.0)
+		
+
+	def add_movable_obstacle(self, obstacle_name, frame, obstacle_size, obstsacle_position, timeout=4):
+		# obstacle pose
+		obstacle_pose = PoseStamped()
+		obstacle_pose.header.frame_id = frame
+		obstacle_pose.pose.position.x = obstsacle_position[0]
+		obstacle_pose.pose.position.y = obstsacle_position[1]
+		obstacle_pose.pose.position.z = obstsacle_position[2]
+		obstacle_pose.pose.orientation.w = 1.0
+
+		# add obstacle
+		self.scene.attach_box(frame, obstacle_name, obstacle_pose, obstacle_size)
+		rospy.sleep(1.0)
+
+
+	def remove_movable_obstacle(self, obstacle_name, frame):
+		self.scene.remove_attached_object(frame, obstacle_name)
+
+
+	def remove_fixed_obstacle(self, obstacle_name):
+		self.scene.remove_world_object(obstacle_name)
+
+
+	def get_object_position(self):
+		while not rospy.is_shutdown():
+			try:
+				(position, oritention) = self.listener.lookupTransform('/base', '/camera_marker', rospy.Time(0))
+				print('position:{}'.format(position))
+				print('oritention:{}'.format(oritention))
+				if position:
+					break
+			except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+				continue
+		return position
+	
+
+	def get_joint_values(self):
+		joints = self.move_group_commander.get_current_joint_values()
+		print('joints:{}'.format(joints))
+		return joints
+
+
+	def point1(self, x, y, z):
+		x = x + 0.011
+		y = y + 0.07
+		z = 0.85
+		return x, y, z
+
+	def point2(self, x, y, z):
+		x = x
+		y = y
+		z = 0.75
+		return x, y, z
+
+	def point3(self, x, y, z):
+		x = x
+		y = y
+		z = 0.65
+		return x, y, z
+
+
+	def point4(self, x, y, z):
+		x = x
+		y = y
+		z = 0.55
+		return x, y, z
+	
+	def point5(self, x, y, z):
+		x = x
+		y = y
+		z = 0.45
+		return x, y, z
+	
+	def point6(self, x, y, z):
+		x = x
+		y = y
+		z = 0.09
+		return x, y, z
+
+
+# -----------------------------------------
+# initialize
+# -----------------------------------------
+print('This code is to control UR5e using the Python MoveIt user interfaces (CRTL-D: quit)')
+print('-'*30)
+demo = MoveGroupInteface()
+
+# -----------------------------------------
+# add virtual obstacles
+# -----------------------------------------
+obstacle_name = 'block_table'
+frame = 'base'
+obstacle_size = [1.0, 1.0, 0.05]
+obstsacle_position = [- 1.0, 0.0, 0.15]
+# demo.remove_fixed_obstacle(obstacle_name)
+demo.add_fixed_obstacle(obstacle_name, frame, obstacle_size, obstsacle_position)
+
+obstacle_name = 'block_wheel'
+frame = 'base'
+obstacle_size = [1.0, 1.0, 0.05]
+obstsacle_position = [0.0, 0.0, -0.05]
+# demo.remove_movable_obstacle(obstacle_name, frame)
+demo.add_fixed_obstacle(obstacle_name, frame, obstacle_size, obstsacle_position)
+
+# obstacle_name = 'block_beam'
+# frame = 'base'
+# obstacle_size = [0.5, 0.05, 1.5]
+# obstsacle_position = [0.2, 0.5, 0.1]
+# demo.remove_fixed_obstacle(obstacle_name)
+# demo.add_fixed_obstacle(obstacle_name, frame, obstacle_size, obstsacle_position)
+
+# obstacle_name = 'block_camera'
+# frame = 'tool0'
+# obstacle_size = [0.15, 0.15, 0.20]
+# obstsacle_position = [0., 0., 0.15]
+# demo.remove_movable_obstacle(obstacle_name, frame)
+# demo.add_movable_obstacle(obstacle_name, frame, obstacle_size, obstsacle_position)
+print('virtual obstacles have been added.')
+print('-'*30)
+
+# -----------------------------------------
+# get joint status, and set good wrist 3 as -3.14 
+# -----------------------------------------
+# joints = demo.get_joint_values()
+# print('joints:{}'.format(joints))
+# joint_wrist3 = -3.14
+# demo.plan_joint_goal(0.021526813507080078, -0.9199651044658204, 0.11347371736635381, -0.7679031652263184, -1.5622084776507776, -3.140066925679342)
+# # demo.plan_joint_goal(joints[0], joints[1], joints[2], joints[3], joints[4], joint_wrist3)
+# print('wrist 3 has been already set!')
+# print('-'*30)
+
+# -----------------------------------------
+# get object position in real time
+# -----------------------------------------
+position = demo.get_object_position()
+print('object position is obtained!')
+print('-'*30)
+x_init = -position[0]
+y_init = -position[1]
+z_init = position[2]
+
+
+print('Enter: execute trajectory')
+raw_input()
+
+x, y, z = demo.point1(x_init, y_init, z_init)
+print('x:{} y:{} z:{}'.format(x, y, z))
+cartesian_plan, fraction = demo.plan_cartesian_path(x, y, z)
+demo.execute_plan(cartesian_plan)
+print('-'*30)
+
+x, y, z = demo.point2(x, y, z)
+print('x:{} y:{} z:{}'.format(x, y, z))
+cartesian_plan, fraction = demo.plan_cartesian_path(x, y, z)
+demo.execute_plan(cartesian_plan)
+print('-'*30)
+
+x, y, z = demo.point3(x, y, z)
+print('x:{} y:{} z:{}'.format(x, y, z))
+cartesian_plan, fraction = demo.plan_cartesian_path(x, y, z)
+demo.execute_plan(cartesian_plan)
+print('-'*30)
+
+x, y, z = demo.point4(x, y, z)
+print('x:{} y:{} z:{}'.format(x, y, z))
+cartesian_plan, fraction = demo.plan_cartesian_path(x, y, z)
+demo.execute_plan(cartesian_plan)
+print('-'*30)
+
+x, y, z = demo.point5(x, y, z)
+print('x:{} y:{} z:{}'.format(x, y, z))
+cartesian_plan, fraction = demo.plan_cartesian_path(x, y, z)
+demo.execute_plan(cartesian_plan)
+print('-'*30)
+
+x, y, z = demo.point6(x, y, z)
+print('x:{} y:{} z:{}'.format(x, y, z))
+cartesian_plan, fraction = demo.plan_cartesian_path(x, y, z)
+demo.execute_plan(cartesian_plan)
+print('-'*30)

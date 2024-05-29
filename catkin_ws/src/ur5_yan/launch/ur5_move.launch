@@ -1,0 +1,59 @@
+<launch>  
+  <!-- robot_ip: IP-address of the robot's socket-messaging server -->
+  <arg name="robot_ip" default="10.66.171.4" doc="IP of the controller"/>
+  <!-- kinematics_config: calibration file for UR5e -->
+  <arg name="kinematics_config" default="$(find ur_description)/config/ur5e_calibration.yaml"/>
+  <!-- marker parameters -->
+  <arg name="marker_size" value="0.067" doc="Size of the ArUco marker used, in meters" />
+  <arg name="marker_id" value="25" doc="The ID of the ArUco marker used" />
+  <!-- camera parameters -->
+  <arg name="namespace_prefix"  default="ur5_wrist_handeyecalibration" />
+  <arg name="eye_on_hand"  default="true" />
+
+  <!--start UR5e-->
+  <include file="$(find ur_robot_driver)/launch/ur5e_bringup.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
+    <arg name="kinematics_config" value="$(arg kinematics_config)"/>
+  </include>
+
+  <!--start moveit-->
+  <include file="$(find ur5e_moveit_config)/launch/ur5e_moveit_planning_execution.launch">
+  </include>
+
+  <!--start rviz-->
+  <include file="$(find ur5_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="rviz_config" value="$(find ur5_moveit_config)/launch/moveit.rviz"/>
+  </include>
+  
+  <!-- start wrist camera
+  <include file="$(find usb_cam)/launch/usb_cam_wrist.launch" >
+  </include> -->
+
+  <!-- start astro camera -->
+  <!-- <include file="$(find astra_camera)/launch/astrapro.launch" >
+  </include> -->
+
+  <!-- <node name="image_view" pkg="image_view" type="image_view" respawn="false" output="screen">
+    <remap from="image" to="/aruco_tracker/result"/>
+    <param name="autosize" value="true" />
+  </node> -->
+
+  <!-- start ArUco
+  <node name="aruco_tracker" pkg="aruco_ros" type="single">
+      <remap from="/camera_info" to="/camera/rgb/camera_info" />
+      <remap from="/image" to="/camera/rgb/image_raw" />
+      <param name="image_is_rectified" value="true"/>
+      <param name="marker_size"        value="$(arg marker_size)"/>
+      <param name="marker_id"          value="$(arg marker_id)"/>
+      <param name="reference_frame"    value="rgb_camera_link"/>
+      <param name="camera_frame"       value="rgb_camera_link"/>
+      <param name="marker_frame"       value="camera_marker" />
+  </node> -->
+
+  <!--publish transformation-->
+  <!-- <include file="$(find easy_handeye)/launch/publish.launch" >
+    <arg name="eye_on_hand" value="$(arg eye_on_hand)"/>
+    <arg name="namespace_prefix" value="$(arg namespace_prefix)"/>
+  </include> -->
+
+</launch>
